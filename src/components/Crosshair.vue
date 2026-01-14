@@ -1,43 +1,65 @@
-<script setup>
-import { ref } from 'vue'
-
-defineProps({
-  msg: String,
-})
-
-const count = ref(0)
-</script>
-
 <template>
-  <h1>{{ msg }}</h1>
-
-  <div class="card">
-    <button type="button" @click="count++">count is {{ count }}</button>
-    <p>
-      Edit
-      <code>components/HelloWorld.vue</code> to test HMR
-    </p>
+  <div
+    class="crosshair"
+    :style="{ left: x + 'px', top: y + 'px' }"
+  >
+    <span />
+    <span />
+    <span />
+    <span />
   </div>
-
-  <p>
-    Check out
-    <a href="https://vuejs.org/guide/quick-start.html#local" target="_blank"
-      >create-vue</a
-    >, the official Vue + Vite starter
-  </p>
-  <p>
-    Learn more about IDE Support for Vue in the
-    <a
-      href="https://vuejs.org/guide/scaling-up/tooling.html#ide-support"
-      target="_blank"
-      >Vue Docs Scaling up Guide</a
-    >.
-  </p>
-  <p class="read-the-docs">Click on the Vite and Vue logos to learn more</p>
 </template>
 
+<script setup>
+defineProps({
+  x: Number,
+  y: Number,
+});
+</script>
+
 <style scoped>
-.read-the-docs {
-  color: #888;
+.crosshair {
+  position: fixed;
+  width: 28px;
+  height: 28px;
+  transform: translate(-50%, -50%);
+  pointer-events: none;
+}
+
+.crosshair span {
+  position: absolute;
+  background: #00ff88;
+}
+
+.crosshair span:nth-child(1) {
+  width: 2px;
+  height: 10px;
+  top: 0;
+  left: 50%;
+  transform: translateX(-50%);
+}
+
+.crosshair span:nth-child(2) {
+  width: 2px;
+  height: 10px;
+  bottom: 0;
+  left: 50%;
+  transform: translateX(-50%);
+}
+
+.crosshair span:nth-child(3) {
+  width: 10px;
+  height: 2px;
+  left: 0;
+  top: 50%;
+  transform: translateY(-50%);
+}
+
+.crosshair span:nth-child(4) {
+  width: 10px;
+  height: 2px;
+  right: 0;
+  top: 50%;
+  transform: translateY(-50%);
 }
 </style>
