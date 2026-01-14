@@ -8,12 +8,18 @@
       <div>Shots: {{ shots }}</div>
     </div>
 
+    <!-- MUNDO -->
     <div
-      v-for="t in targets"
-      :key="t.id"
-      class="target"
-      :style="{ left: t.x + 'px', top: t.y + 'px' }"
-    ></div>
+      class="world"
+      :style="{ transform: `translate(${-cam.x}px, ${-cam.y}px)` }"
+    >
+      <div
+        v-for="t in targets"
+        :key="t.id"
+        class="target"
+        :style="{ left: t.x + 'px', top: t.y + 'px' }"
+      ></div>
+    </div>
   </div>
 </template>
 
@@ -26,7 +32,9 @@ const score = ref(0);
 const hits = ref(0);
 const shots = ref(0);
 
-const fireRate = 150;
+const cam = ref({ x: 0, y: 0 });
+const sensitivity = 0.3;
+
 let lastShot = 0;
 let animationId = null;
 
@@ -37,21 +45,21 @@ function lockPointer() {
 function spawnTarget() {
   targets.value.push({
     id: Math.random(),
-    x: Math.random() * (window.innerWidth - 40),
-    y: Math.random() * (window.innerHeight - 40),
-    vx: (Math.random() - 0.5) * 3,
-    vy: (Math.random() - 0.5) * 3,
+    x: Math.random() * 2000,
+    y: Math.random() * 2000,
+    vx: (Math.random() - 0.5) * 2,
+    vy: (Math.random() - 0.5) * 2,
   });
 }
 
 function shoot() {
   const now = Date.now();
-  if (now - lastShot < fireRate) return;
+  if (now - lastShot < 150) return;
   lastShot = now;
   shots.value++;
 
-  const cx = window.innerWidth / 2;
-  const cy = window.innerHeight / 2;
+  const cx = cam.value.x + window.innerWidth / 2;
+  const cy = cam.value.y + window.innerHeight / 2;
 
   targets.value.forEach(t => {
     if (
@@ -72,12 +80,14 @@ function update() {
   targets.value.forEach(t => {
     t.x += t.vx;
     t.y += t.vy;
-
-    if (t.x <= 0 || t.x >= window.innerWidth - 40) t.vx *= -1;
-    if (t.y <= 0 || t.y >= window.innerHeight - 40) t.vy *= -1;
   });
 
   animationId = requestAnimationFrame(update);
+}
+
+function onMouseMove(e) {
+  cam.value.x += e.movementX * sensitivity;
+  cam.value.y += e.movementY * sensitivity;
 }
 
 function onMouseDown(e) {
@@ -85,13 +95,15 @@ function onMouseDown(e) {
 }
 
 onMounted(() => {
-  spawnTarget();
+  for (let i = 0; i < 5; i++) spawnTarget();
   animationId = requestAnimationFrame(update);
+  window.addEventListener("mousemove", onMouseMove);
   window.addEventListener("mousedown", onMouseDown);
 });
 
 onUnmounted(() => {
   cancelAnimationFrame(animationId);
+  window.removeEventListener("mousemove", onMouseMove);
   window.removeEventListener("mousedown", onMouseDown);
 });
 </script>
@@ -101,7 +113,14 @@ onUnmounted(() => {
   width: 100vw;
   height: 100vh;
   background: #111;
+  overflow: hidden;
   position: relative;
+}
+
+.world {
+  position: absolute;
+  width: 4000px;
+  height: 4000px;
 }
 
 .target {
@@ -116,6 +135,5 @@ onUnmounted(() => {
   position: fixed;
   top: 10px;
   left: 10px;
-  font-size: 14px;
 }
 </style>

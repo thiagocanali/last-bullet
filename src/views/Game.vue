@@ -7,11 +7,16 @@
     </div>
 
     <div
-      v-for="e in enemies"
-      :key="e.id"
-      class="enemy"
-      :style="{ left: e.x + 'px', top: e.y + 'px' }"
-    ></div>
+      class="world"
+      :style="{ transform: `translate(${-cam.x}px, ${-cam.y}px)` }"
+    >
+      <div
+        v-for="e in enemies"
+        :key="e.id"
+        class="enemy"
+        :style="{ left: e.x + 'px', top: e.y + 'px' }"
+      ></div>
+    </div>
   </div>
 </template>
 
@@ -22,7 +27,9 @@ import Crosshair from "../components/Crosshair.vue";
 const enemies = ref([]);
 const kills = ref(0);
 
-const fireRate = 200;
+const cam = ref({ x: 0, y: 0 });
+const sensitivity = 0.3;
+
 let lastShot = 0;
 let animationId = null;
 
@@ -33,21 +40,21 @@ function lockPointer() {
 function spawnEnemy() {
   enemies.value.push({
     id: Math.random(),
-    x: Math.random() * (window.innerWidth - 40),
-    y: Math.random() * (window.innerHeight - 40),
-    vx: (Math.random() - 0.5) * 2,
-    vy: (Math.random() - 0.5) * 2,
+    x: Math.random() * 2000,
+    y: Math.random() * 2000,
+    vx: (Math.random() - 0.5) * 1.5,
+    vy: (Math.random() - 0.5) * 1.5,
     life: 2,
   });
 }
 
 function shoot() {
   const now = Date.now();
-  if (now - lastShot < fireRate) return;
+  if (now - lastShot < 200) return;
   lastShot = now;
 
-  const cx = window.innerWidth / 2;
-  const cy = window.innerHeight / 2;
+  const cx = cam.value.x + window.innerWidth / 2;
+  const cy = cam.value.y + window.innerHeight / 2;
 
   enemies.value.forEach(e => {
     if (
@@ -70,12 +77,14 @@ function update() {
   enemies.value.forEach(e => {
     e.x += e.vx;
     e.y += e.vy;
-
-    if (e.x <= 0 || e.x >= window.innerWidth - 40) e.vx *= -1;
-    if (e.y <= 0 || e.y >= window.innerHeight - 40) e.vy *= -1;
   });
 
   animationId = requestAnimationFrame(update);
+}
+
+function onMouseMove(e) {
+  cam.value.x += e.movementX * sensitivity;
+  cam.value.y += e.movementY * sensitivity;
 }
 
 function onMouseDown(e) {
@@ -83,13 +92,15 @@ function onMouseDown(e) {
 }
 
 onMounted(() => {
-  spawnEnemy();
+  for (let i = 0; i < 5; i++) spawnEnemy();
   animationId = requestAnimationFrame(update);
+  window.addEventListener("mousemove", onMouseMove);
   window.addEventListener("mousedown", onMouseDown);
 });
 
 onUnmounted(() => {
   cancelAnimationFrame(animationId);
+  window.removeEventListener("mousemove", onMouseMove);
   window.removeEventListener("mousedown", onMouseDown);
 });
 </script>
@@ -99,7 +110,14 @@ onUnmounted(() => {
   width: 100vw;
   height: 100vh;
   background: #000;
+  overflow: hidden;
   position: relative;
+}
+
+.world {
+  position: absolute;
+  width: 4000px;
+  height: 4000px;
 }
 
 .enemy {
