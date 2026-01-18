@@ -4,19 +4,18 @@
     :class="{ hit }"
     :style="{ left: x + 'px', top: y + 'px' }"
   >
-    <span :style="up"></span>
-    <span :style="down"></span>
-    <span :style="leftArm"></span>
-    <span :style="rightArm"></span>
+    <span></span>
+    <span></span>
+    <span></span>
+    <span></span>
   </div>
 </template>
 
 <script setup>
-import { ref, onMounted, onUnmounted, computed } from "vue";
+import { ref, onMounted, onUnmounted, watchEffect } from "vue";
 
 const props = defineProps({
   hit: Boolean,
-  spread: Number, // 👈 NOVO
 });
 
 const emit = defineEmits(["move"]);
@@ -34,29 +33,13 @@ function onMove(e) {
   emit("move", { x: x.value, y: y.value });
 }
 
-onMounted(() => window.addEventListener("mousemove", onMove));
-onUnmounted(() => window.removeEventListener("mousemove", onMove));
+onMounted(() => {
+  window.addEventListener("mousemove", onMove);
+});
 
-/* ARMS */
-const up = computed(() => ({
-  top: -6 - props.spread + "px",
-  left: "9px",
-}));
-
-const down = computed(() => ({
-  bottom: -6 - props.spread + "px",
-  left: "9px",
-}));
-
-const leftArm = computed(() => ({
-  left: -6 - props.spread + "px",
-  top: "9px",
-}));
-
-const rightArm = computed(() => ({
-  right: -6 - props.spread + "px",
-  top: "9px",
-}));
+onUnmounted(() => {
+  window.removeEventListener("mousemove", onMove);
+});
 </script>
 
 <style scoped>
@@ -71,16 +54,35 @@ const rightArm = computed(() => ({
 
 .crosshair span {
   position: absolute;
-  width: 6px;
-  height: 2px;
   background: white;
-  transition: all 0.08s ease-out;
 }
 
-.crosshair span:nth-child(1),
-.crosshair span:nth-child(2) {
+.crosshair span:nth-child(1) {
+  top: 0;
+  left: 9px;
   width: 2px;
   height: 6px;
+}
+
+.crosshair span:nth-child(2) {
+  bottom: 0;
+  left: 9px;
+  width: 2px;
+  height: 6px;
+}
+
+.crosshair span:nth-child(3) {
+  left: 0;
+  top: 9px;
+  width: 6px;
+  height: 2px;
+}
+
+.crosshair span:nth-child(4) {
+  right: 0;
+  top: 9px;
+  width: 6px;
+  height: 2px;
 }
 
 .crosshair.hit span {

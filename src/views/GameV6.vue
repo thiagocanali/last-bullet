@@ -20,11 +20,14 @@
       </div>
     </div>
 
-    <div class="world" :style="{ 
-      filter: muzzleFlash ? 'brightness(1.4)' : 'none' 
-    }">
+    <div class="world" :style="{ filter: muzzleFlash ? 'brightness(1.4)' : 'none' }">
       <div class="grid-layer"></div>
       
+      <div v-for="p in particles" :key="p.id" 
+           class="particle-effect" 
+           :style="{ left: p.x + 'px', top: p.y + 'px', backgroundColor: p.color, opacity: p.life }">
+      </div>
+
       <div v-for="e in enemies" :key="e.id" class="enemy" :style="{ left: e.x + 'px', top: e.y + 'px' }">
         <div class="enemy-hp" :style="{ width: (e.life * 50) + '%' }"></div>
       </div>
@@ -38,19 +41,15 @@ import Crosshair from "../components/Crosshair.vue";
 import { weapons } from "../assets/weapons";
 
 const ENEMY_SIZE = 40;
-
-// Referência da mira (posição na tela)
 const aim = ref({ x: window.innerWidth / 2, y: window.innerHeight / 2 });
-
 const weaponKey = ref("rifle");
 const weapon = ref(weapons[weaponKey.value]);
-
 const ammo = ref(weapon.value.maxAmmo);
 const isReloading = ref(false);
 const muzzleFlash = ref(false);
-
 const currentSpread = ref(0);
 const enemies = ref([]);
+const particles = ref([]); // Lista de partículas
 const kills = ref(0);
 const hitMarker = ref(false);
 
@@ -59,25 +58,35 @@ let lastShot = 0;
 let raf = null;
 
 function lockPointer() {
-  if (document.pointerLockElement !== document.body) {
-    document.body.requestPointerLock();
-  }
+  if (document.pointerLockElement !== document.body) document.body.requestPointerLock();
 }
 
-// Atualiza a posição da mira vinda do componente Crosshair
-function updateAim(pos) { 
-  aim.value = pos; 
-}
+function updateAim(pos) { aim.value = pos; }
 
 function spawnEnemy() {
   enemies.value.push({
     id: Math.random(),
     x: Math.random() * (window.innerWidth - ENEMY_SIZE),
     y: Math.random() * (window.innerHeight - ENEMY_SIZE),
-    vx: (Math.random() - 0.5) * 5, // Aumentei a velocidade já que o mapa é menor
+    vx: (Math.random() - 0.5) * 5,
     vy: (Math.random() - 0.5) * 5,
     life: 2,
   });
+}
+
+// FUNÇÃO PARA CRIAR EXPLOSÃO DE PARTÍCULAS
+function createExplosion(x, y, color) {
+  for (let i = 0; i < 8; i++) {
+    particles.value.push({
+      id: Math.random(),
+      x: x,
+      y: y,
+      vx: (Math.random() - 0.5) * 15,
+      vy: (Math.random() - 0.5) * 15,
+      life: 1.0,
+      color: color
+    });
+  }
 }
 
 function reload() {
@@ -94,18 +103,15 @@ function shoot() {
     if (ammo.value <= 0) reload();
     return;
   }
-
   const now = Date.now();
   if (now - lastShot < weapon.value.fireRate) return;
   
   lastShot = now;
   ammo.value--;
-  
   muzzleFlash.value = true;
   setTimeout(() => muzzleFlash.value = false, 30);
   currentSpread.value = Math.min(currentSpread.value + 10, weapon.value.spreadMax);
 
-  // O tiro agora acontece na posição exata da mira (aim)
   const tx = aim.value.x;
   const ty = aim.value.y;
 
@@ -113,10 +119,14 @@ function shoot() {
     if (tx >= e.x && tx <= e.x + ENEMY_SIZE && ty >= e.y && ty <= e.y + ENEMY_SIZE) {
       e.life -= weapon.value.damage;
       hitMarker.value = true;
+      
+      // Cria partículas no local do acerto
+      createExplosion(tx, ty, '#ff3b3b');
+      
       setTimeout(() => (hitMarker.value = false), 60);
-
       if (e.life <= 0) {
         kills.value++;
+        createExplosion(e.x + 20, e.y + 20, '#ffffff'); // Explosão branca na morte
         enemies.value = enemies.value.filter(x => x.id !== e.id);
         spawnEnemy();
       }
@@ -127,12 +137,20 @@ function shoot() {
 function update() {
   currentSpread.value *= 0.9;
 
-  // Move os inimigos e rebate nas bordas da tela
+  // Atualiza Inimigos
   enemies.value.forEach(e => {
     e.x += e.vx; e.y += e.vy;
     if (e.x <= 0 || e.x >= window.innerWidth - ENEMY_SIZE) e.vx *= -1;
     if (e.y <= 0 || e.y >= window.innerHeight - ENEMY_SIZE) e.vy *= -1;
   });
+
+  // Atualiza Partículas
+  particles.value.forEach(p => {
+    p.x += p.vx;
+    p.y += p.vy;
+    p.life -= 0.02; // Partícula vai sumindo
+  });
+  particles.value = particles.value.filter(p => p.life > 0);
 
   if (shooting) shoot();
   raf = requestAnimationFrame(update);
@@ -173,9 +191,19 @@ onUnmounted(() => cancelAnimationFrame(raf));
 
 .enemy {
   position: absolute; width: 40px; height: 40px;
-  background: #ff3b3b; border-radius: 50%; /* Inimigos redondos agora */
+  background: #ff3b3b; border-radius: 50%;
   box-shadow: 0 0 20px rgba(255, 59, 59, 0.6);
   border: 2px solid #fff;
+  z-index: 2;
+}
+
+.particle-effect {
+  position: absolute;
+  width: 4px;
+  height: 4px;
+  border-radius: 50%;
+  pointer-events: none;
+  z-index: 1;
 }
 
 .enemy-hp {
@@ -190,7 +218,7 @@ onUnmounted(() => cancelAnimationFrame(raf));
 
 .stats-box {
   background: rgba(0, 0, 0, 0.8); padding: 10px 20px;
-  border-bottom: 3px solid #e74c3c; color: white; font-family: 'Orbitron', sans-serif;
+  border-bottom: 3px solid #e74c3c; color: white; font-family: sans-serif;
 }
 
 .label { color: #888; font-size: 0.7rem; display: block; }
@@ -208,6 +236,4 @@ onUnmounted(() => cancelAnimationFrame(raf));
 
 .ammo-bar-bg { width: 100%; height: 6px; background: rgba(255,255,255,0.1); }
 .ammo-bar-fill { height: 100%; background: #e74c3c; transition: width 0.1s; }
-
-.low-ammo .ammo-text { color: #ff3b3b; }
 </style>

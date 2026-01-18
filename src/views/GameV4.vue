@@ -21,7 +21,8 @@
     </div>
 
     <div class="world" :style="{ 
-      filter: muzzleFlash ? 'brightness(1.4)' : 'none' 
+      transform: `translate(${-cam.x}px, ${-cam.y}px)`,
+      filter: muzzleFlash ? 'brightness(1.2)' : 'none' 
     }">
       <div class="grid-layer"></div>
       
@@ -37,11 +38,14 @@ import { ref, onMounted, onUnmounted } from "vue";
 import Crosshair from "../components/Crosshair.vue";
 import { weapons } from "../assets/weapons";
 
+const MAP_SIZE = 2500;
 const ENEMY_SIZE = 40;
 
-// Referência da mira (posição na tela)
-const aim = ref({ x: window.innerWidth / 2, y: window.innerHeight / 2 });
+const cam = ref({ x: 0, y: 0 });
+const mouseDelta = { x: 0, y: 0 };
+const sensitivity = 0.5;
 
+const aim = ref({ x: window.innerWidth / 2, y: window.innerHeight / 2 });
 const weaponKey = ref("rifle");
 const weapon = ref(weapons[weaponKey.value]);
 
@@ -49,6 +53,7 @@ const ammo = ref(weapon.value.maxAmmo);
 const isReloading = ref(false);
 const muzzleFlash = ref(false);
 
+const recoil = { x: 0, y: 0 };
 const currentSpread = ref(0);
 const enemies = ref([]);
 const kills = ref(0);
@@ -64,18 +69,20 @@ function lockPointer() {
   }
 }
 
-// Atualiza a posição da mira vinda do componente Crosshair
-function updateAim(pos) { 
-  aim.value = pos; 
+function updateAim(pos) { aim.value = pos; }
+
+function clampCamera() {
+  cam.value.x = Math.max(0, Math.min(cam.value.x, MAP_SIZE - window.innerWidth));
+  cam.value.y = Math.max(0, Math.min(cam.value.y, MAP_SIZE - window.innerHeight));
 }
 
 function spawnEnemy() {
   enemies.value.push({
     id: Math.random(),
-    x: Math.random() * (window.innerWidth - ENEMY_SIZE),
-    y: Math.random() * (window.innerHeight - ENEMY_SIZE),
-    vx: (Math.random() - 0.5) * 5, // Aumentei a velocidade já que o mapa é menor
-    vy: (Math.random() - 0.5) * 5,
+    x: Math.random() * (MAP_SIZE - ENEMY_SIZE),
+    y: Math.random() * (MAP_SIZE - ENEMY_SIZE),
+    vx: (Math.random() - 0.5) * 2.5,
+    vy: (Math.random() - 0.5) * 2.5,
     life: 2,
   });
 }
@@ -101,16 +108,20 @@ function shoot() {
   lastShot = now;
   ammo.value--;
   
+  // Feedback Visual
   muzzleFlash.value = true;
   setTimeout(() => muzzleFlash.value = false, 30);
   currentSpread.value = Math.min(currentSpread.value + 10, weapon.value.spreadMax);
 
-  // O tiro agora acontece na posição exata da mira (aim)
-  const tx = aim.value.x;
-  const ty = aim.value.y;
+  // Recoil
+  recoil.y += weapon.value.recoil.y;
+  recoil.x += (Math.random() - 0.5) * weapon.value.recoil.x;
+
+  const worldX = cam.value.x + aim.value.x;
+  const worldY = cam.value.y + aim.value.y;
 
   enemies.value.forEach(e => {
-    if (tx >= e.x && tx <= e.x + ENEMY_SIZE && ty >= e.y && ty <= e.y + ENEMY_SIZE) {
+    if (worldX >= e.x && worldX <= e.x + ENEMY_SIZE && worldY >= e.y && worldY <= e.y + ENEMY_SIZE) {
       e.life -= weapon.value.damage;
       hitMarker.value = true;
       setTimeout(() => (hitMarker.value = false), 60);
@@ -126,27 +137,40 @@ function shoot() {
 
 function update() {
   currentSpread.value *= 0.9;
+  cam.value.x += mouseDelta.x * sensitivity + recoil.x;
+  cam.value.y += mouseDelta.y * sensitivity + recoil.y;
 
-  // Move os inimigos e rebate nas bordas da tela
+  mouseDelta.x = 0; mouseDelta.y = 0;
+  recoil.x *= 0.8; recoil.y *= 0.8;
+
+  clampCamera();
+
   enemies.value.forEach(e => {
     e.x += e.vx; e.y += e.vy;
-    if (e.x <= 0 || e.x >= window.innerWidth - ENEMY_SIZE) e.vx *= -1;
-    if (e.y <= 0 || e.y >= window.innerHeight - ENEMY_SIZE) e.vy *= -1;
+    if (e.x <= 0 || e.x >= MAP_SIZE - ENEMY_SIZE) e.vx *= -1;
+    if (e.y <= 0 || e.y >= MAP_SIZE - ENEMY_SIZE) e.vy *= -1;
   });
 
   if (shooting) shoot();
   raf = requestAnimationFrame(update);
 }
 
+function onMouseMove(e) {
+  if (document.pointerLockElement !== document.body) return;
+  mouseDelta.x += e.movementX;
+  mouseDelta.y += e.movementY;
+}
+
 onMounted(() => {
   for (let i = 0; i < 8; i++) spawnEnemy();
   raf = requestAnimationFrame(update);
+  window.addEventListener("mousemove", onMouseMove);
   window.addEventListener("mousedown", (e) => e.button === 0 && (shooting = true));
   window.addEventListener("mouseup", (e) => e.button === 0 && (shooting = false));
   window.addEventListener("keydown", (e) => {
-    if (e.key === "1") { weapon.value = weapons.pistol; ammo.value = weapon.value.maxAmmo; }
-    if (e.key === "2") { weapon.value = weapons.rifle; ammo.value = weapon.value.maxAmmo; }
-    if (e.key === "3") { weapon.value = weapons.sniper; ammo.value = weapon.value.maxAmmo; }
+    if (e.key === "1") { weaponKey.ref = "pistol"; weapon.value = weapons.pistol; ammo.value = weapon.value.maxAmmo; }
+    if (e.key === "2") { weaponKey.ref = "rifle"; weapon.value = weapons.rifle; ammo.value = weapon.value.maxAmmo; }
+    if (e.key === "3") { weaponKey.ref = "sniper"; weapon.value = weapons.sniper; ammo.value = weapon.value.maxAmmo; }
     if (e.key.toLowerCase() === "r") reload();
   });
 });
@@ -161,26 +185,25 @@ onUnmounted(() => cancelAnimationFrame(raf));
 }
 
 .world {
-  position: absolute; width: 100%; height: 100%;
+  position: absolute; width: 2500px; height: 2500px;
   transition: filter 0.05s;
 }
 
 .grid-layer {
   position: absolute; width: 100%; height: 100%;
   background-image: linear-gradient(#151515 1px, transparent 1px), linear-gradient(90deg, #151515 1px, transparent 1px);
-  background-size: 60px 60px;
+  background-size: 80px 80px;
 }
 
 .enemy {
   position: absolute; width: 40px; height: 40px;
-  background: #ff3b3b; border-radius: 50%; /* Inimigos redondos agora */
-  box-shadow: 0 0 20px rgba(255, 59, 59, 0.6);
-  border: 2px solid #fff;
+  background: #ff3b3b; border-radius: 4px;
+  box-shadow: 0 0 15px rgba(255, 59, 59, 0.4);
 }
 
 .enemy-hp {
   position: absolute; top: -10px; height: 4px;
-  background: #2ecc71; transition: width 0.1s;
+  background: #2ecc71; transition: width 0.2s;
 }
 
 .hud {
@@ -189,25 +212,26 @@ onUnmounted(() => cancelAnimationFrame(raf));
 }
 
 .stats-box {
-  background: rgba(0, 0, 0, 0.8); padding: 10px 20px;
-  border-bottom: 3px solid #e74c3c; color: white; font-family: 'Orbitron', sans-serif;
+  background: rgba(0, 0, 0, 0.7); padding: 10px 20px;
+  border-left: 4px solid #e74c3c; color: white; font-family: monospace;
 }
 
-.label { color: #888; font-size: 0.7rem; display: block; }
-.value { font-weight: bold; font-size: 1.1rem; }
+.label { color: #888; font-size: 0.8rem; margin-right: 8px; }
+.value { font-weight: bold; font-size: 1.2rem; }
 
 .ammo-hud {
   position: fixed; bottom: 40px; right: 40px; z-index: 10;
-  width: 220px;
+  width: 200px; text-align: right;
 }
 
 .ammo-text {
-  font-family: monospace; font-size: 1.8rem; color: white;
-  text-align: right; margin-bottom: 5px;
+  font-family: monospace; font-size: 1.5rem; color: white;
+  margin-bottom: 5px; text-shadow: 0 2px 4px black;
 }
 
-.ammo-bar-bg { width: 100%; height: 6px; background: rgba(255,255,255,0.1); }
-.ammo-bar-fill { height: 100%; background: #e74c3c; transition: width 0.1s; }
+.ammo-bar-bg { width: 100%; height: 8px; background: rgba(255,255,255,0.1); border-radius: 4px; }
+.ammo-bar-fill { height: 100%; background: #e74c3c; border-radius: 4px; transition: width 0.1s; }
 
-.low-ammo .ammo-text { color: #ff3b3b; }
+.low-ammo .ammo-text { color: #ff3b3b; animation: blink 0.5s infinite; }
+@keyframes blink { 0% { opacity: 1; } 50% { opacity: 0.5; } 100% { opacity: 1; } }
 </style>
